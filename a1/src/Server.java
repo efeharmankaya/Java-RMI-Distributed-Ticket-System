@@ -142,19 +142,22 @@ public class Server extends UnicastRemoteObject implements IServer {
                 eventType.name(), eventId, id));
     }
 
-    private String[] getEventsById(HashMap<EventType, HashMap<String, EventData>> serverData, String id) {
-        ArrayList<String> clientEvents = new ArrayList<>();
+    private HashMap<EventType, ArrayList<String>> getEventsById(
+            HashMap<EventType, HashMap<String, EventData>> serverData, String id) {
+        HashMap<EventType, ArrayList<String>> clientEvents = new HashMap();
         for (EventType eventType : EventType.values()) {
             if (eventType.equals(EventType.None))
                 continue;
 
+            ArrayList<String> tempEvents = new ArrayList<>();
             HashMap<String, EventData> events = serverData.get(eventType);
             for (Map.Entry<String, EventData> event : events.entrySet()) {
                 if (event.getValue().guests.contains(id))
-                    clientEvents.add(event.getKey());
+                    tempEvents.add(event.getKey());
             }
+            clientEvents.put(eventType, tempEvents);
         }
-        return clientEvents.toArray(new String[0]);
+        return clientEvents;
     }
 
     public Response get(UserInfo user, String id) {
@@ -163,8 +166,7 @@ public class Server extends UnicastRemoteObject implements IServer {
                     "User doesn't have valid permissions to access : " + Permission.get.label.toUpperCase());
         }
 
-        // current server parsing
-        HashMap<String, String[]> clientEvents = new HashMap<>();
+        HashMap<String, HashMap<EventType, ArrayList<String>>> clientEvents = new HashMap<>();
         try {
             for (ServerPort s : ServerPort.values()) {
                 if (s.PORT == -1)
@@ -183,6 +185,7 @@ public class Server extends UnicastRemoteObject implements IServer {
                     }
                 }
             }
+            System.out.println(clientEvents.toString());
         } catch (Exception e) {
             System.out.println("Exception in get: " + e.getMessage());
         }
@@ -196,7 +199,21 @@ public class Server extends UnicastRemoteObject implements IServer {
                     "User doesn't have valid permissions to access : " + Permission.cancel.label.toUpperCase());
         }
 
-        return new Response("CANCEL: Good for now");
+        // (key, value) => (eventType, eventData HashMap)
+        for (Map.Entry<EventType, HashMap<String, EventData>> event : this.serverData.entrySet()) {
+            // (key, value) => (eventId, eventData)
+            for (Map.Entry<String, EventData> eventData : event.getValue().entrySet()) {
+                if (eventData.getKey().equalsIgnoreCase(eventId)) {
+                    if (!eventData.getValue().guests.contains(id))
+                        return new Response(String.format(
+                                "Unable to cancel ticket - %s does not have a reservation for %s", id, eventId));
+                    this.serverData.get(event.getKey()).get(eventData.getKey()).removeGuest(id);
+                    return new Response("Successfully canceled the ticket");
+                }
+            }
+        }
+
+        return new Response("Unable to cancel ticket - eventId does not exist.");
     }
 
     // possible

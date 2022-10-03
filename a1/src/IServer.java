@@ -6,7 +6,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 
 public interface IServer extends Remote {
-    class EventData {
+    class EventData implements Serializable {
         int capacity;
         ArrayList<String> guests;
 

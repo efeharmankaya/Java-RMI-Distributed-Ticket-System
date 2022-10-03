@@ -53,6 +53,10 @@ public class ClientServer {
                     } // regular operations
                     else if (action.equalsIgnoreCase(IServer.Permission.reserve.label)) {
                         response = reserve(server, userInfo, inputCommands);
+                    } else if (action.equalsIgnoreCase(IServer.Permission.get.label)) {
+                        response = get(server, userInfo, inputCommands);
+                    } else if (action.equalsIgnoreCase(IServer.Permission.cancel.label)) {
+                        response = cancel(server, userInfo, inputCommands);
                     }
 
                     if (response != null) {
@@ -184,6 +188,36 @@ public class ClientServer {
             response = server.reserve(user, inputCommands[1], inputCommands[2], eventType);
         } catch (RemoteException e) {
             return new IServer.Response("Remote Exception in RESERVE: " + e.getMessage());
+        }
+        return response;
+    }
+
+    public static IServer.Response get(IServer server, UserInfo user, String[] inputCommands) {
+        if (inputCommands.length != 2) {
+            return new IServer.Response(
+                    "Invalid input parameters for 'get' | requires exactly 2 parameters | Note: "
+                            + IServer.Permission.get.message);
+        }
+
+        IServer.Response response;
+        try {
+            response = server.get(user, inputCommands[1]);
+        } catch (RemoteException e) {
+            return new IServer.Response("Remote Exception in GET: " + e.getMessage());
+        }
+        return response;
+    }
+
+    public static IServer.Response cancel(IServer server, UserInfo user, String[] inputCommands) {
+        if (inputCommands.length != 3)
+            return new IServer.Response("Invalid input parameters for 'cancel' | requires exactly 3 parameters | Note: "
+                    + IServer.Permission.cancel.message);
+
+        IServer.Response response;
+        try {
+            response = server.cancel(user, inputCommands[1], inputCommands[2]);
+        } catch (RemoteException e) {
+            return new IServer.Response("Remote Exception in CANCEL: " + e.getMessage());
         }
         return response;
     }

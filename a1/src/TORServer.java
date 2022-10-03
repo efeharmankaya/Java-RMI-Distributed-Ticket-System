@@ -17,23 +17,24 @@ public class TORServer {
                 {
                     put(IServer.EventType.Arts, new HashMap<>() {
                         {
-                            put("TORM010122", new IServer.EventData(5));
-                            put("TORA010122", new IServer.EventData(3));
+                            put("TORM010122", new IServer.EventData(5, new String[] { "MTLP5555", "TORP5555" }));
+                            put("TORA010122", new IServer.EventData(0,
+                                    new String[] { "MTLP1111", "MTLP2222", "MTLP3333", "MTLP4444", "MTLP5555" }));
                             put("TORE010122", new IServer.EventData(15));
                         }
                     });
                     put(IServer.EventType.Concert, new HashMap<>() {
                         {
-                            put("TORM020122", new IServer.EventData(5));
-                            put("TORA020122", new IServer.EventData(3));
-                            put("TORE020122", new IServer.EventData(15));
+                            put("TORM020122", new IServer.EventData(5, new String[] { "MTLP5555", "TORP5555" }));
+                            put("TORA020122", new IServer.EventData(3, new String[] { "MTLP2222" }));
+                            put("TORE020122", new IServer.EventData(15, new String[] { "TORP5555" }));
                         }
                     });
                     put(IServer.EventType.Theatre, new HashMap<>() {
                         {
-                            put("TORM030122", new IServer.EventData(5));
-                            put("TORA030122", new IServer.EventData(3));
-                            put("TORE030122", new IServer.EventData(15));
+                            put("TORM030122", new IServer.EventData(5, new String[] { "MTLP5555" }));
+                            put("TORA030122", new IServer.EventData(3, new String[] { "VANP5555", "VANP2222" }));
+                            put("TORE030122", new IServer.EventData(15, new String[] { "MTLP2222" }));
                         }
                     });
                 }

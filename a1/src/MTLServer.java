@@ -18,23 +18,24 @@ public class MTLServer {
                 {
                     put(IServer.EventType.Arts, new HashMap<>() {
                         {
-                            put("MTLM010122", new IServer.EventData(5));
-                            put("MTLA010122", new IServer.EventData(3));
+                            put("MTLM010122", new IServer.EventData(5, new String[] { "MTLP5555", "TORP5555" }));
+                            put("MTLA010122", new IServer.EventData(0,
+                                    new String[] { "MTLP1111", "MTLP2222", "MTLP3333", "MTLP4444", "MTLP5555" }));
                             put("MTLE010122", new IServer.EventData(15));
                         }
                     });
                     put(IServer.EventType.Concert, new HashMap<>() {
                         {
-                            put("MTLM020122", new IServer.EventData(5));
-                            put("MTLA020122", new IServer.EventData(3));
-                            put("MTLE020122", new IServer.EventData(15));
+                            put("MTLM020122", new IServer.EventData(5, new String[] { "MTLP5555", "TORP5555" }));
+                            put("MTLA020122", new IServer.EventData(3, new String[] { "MTLP2222" }));
+                            put("MTLE020122", new IServer.EventData(15, new String[] { "TORP5555" }));
                         }
                     });
                     put(IServer.EventType.Theatre, new HashMap<>() {
                         {
-                            put("MTLM030122", new IServer.EventData(5));
-                            put("MTLA030122", new IServer.EventData(3));
-                            put("MTLE030122", new IServer.EventData(15));
+                            put("MTLM030122", new IServer.EventData(5, new String[] { "MTLP5555" }));
+                            put("MTLA030122", new IServer.EventData(3, new String[] { "VANP5555", "VANP2222" }));
+                            put("MTLE030122", new IServer.EventData(15, new String[] { "MTLP2222" }));
                         }
                     });
                 }
