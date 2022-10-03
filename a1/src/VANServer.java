@@ -5,49 +5,48 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.HashMap;
 
-public class MTLServer {
-    static final int PORT_NUM = 1111;
+public class VANServer {
+    static final int PORT_NUM = 1113;
 
     public static void main(String[] args) throws Exception {
         String registryURL;
         try {
             startRegistry(PORT_NUM);
-            // STARTING MTL SERVER DATA
-            // TODO add guests
+            // STARTING VAN SERVER DATA
             HashMap<IServer.EventType, HashMap<String, IServer.EventData>> initialServerData = new HashMap<>() {
                 {
                     put(IServer.EventType.Arts, new HashMap<>() {
                         {
-                            put("MTLM010122", new IServer.EventData(5));
-                            put("MTLA010122", new IServer.EventData(3));
-                            put("MTLE010122", new IServer.EventData(15));
+                            put("VANM010122", new IServer.EventData(5));
+                            put("VANA010122", new IServer.EventData(3));
+                            put("VANE010122", new IServer.EventData(15));
                         }
                     });
                     put(IServer.EventType.Concert, new HashMap<>() {
                         {
-                            put("MTLM020122", new IServer.EventData(5));
-                            put("MTLA020122", new IServer.EventData(3));
-                            put("MTLE020122", new IServer.EventData(15));
+                            put("VANM020122", new IServer.EventData(5));
+                            put("VANA020122", new IServer.EventData(3));
+                            put("VANE020122", new IServer.EventData(15));
                         }
                     });
                     put(IServer.EventType.Theatre, new HashMap<>() {
                         {
-                            put("MTLM030122", new IServer.EventData(5));
-                            put("MTLA030122", new IServer.EventData(3));
-                            put("MTLE030122", new IServer.EventData(15));
+                            put("VANM030122", new IServer.EventData(5));
+                            put("VANA030122", new IServer.EventData(3));
+                            put("VANE030122", new IServer.EventData(15));
                         }
                     });
                 }
             };
 
             Server serverObj = new Server(initialServerData);
-            registryURL = "rmi://localhost:" + PORT_NUM + "/mtl";
+            registryURL = "rmi://localhost:" + PORT_NUM + "/van";
             Naming.rebind(registryURL, serverObj);
             System.out.println("Server registered.  Registry currently contains:");
             listRegistry(registryURL);
-            System.out.println("MTL Server ready.");
+            System.out.println("VAN Server ready.");
         } catch (Exception e) {
-            System.out.println("Error in MTLServer: " + e.getMessage());
+            System.out.println("Error in VANServer: " + e.getMessage());
         }
     }
 

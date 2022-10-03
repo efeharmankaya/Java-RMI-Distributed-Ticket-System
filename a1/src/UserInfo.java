@@ -35,6 +35,10 @@ public class UserInfo implements Serializable {
         return this.permissions.permissions.contains(permission);
     }
 
+    public boolean isAdmin() {
+        return this.permissions.permissions.containsAll(IServer.AdminPermissions);
+    }
+
     public boolean validate() {
         boolean isValid = false;
         if (this.clientId.length() < 5)

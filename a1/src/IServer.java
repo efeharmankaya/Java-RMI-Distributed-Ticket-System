@@ -1,8 +1,46 @@
 import java.io.Serializable;
 import java.rmi.*;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 
 public interface IServer extends Remote {
+    class EventData {
+        int capacity;
+        ArrayList<String> guests;
+
+        public EventData() {
+            this.capacity = 0;
+            this.guests = new ArrayList<>();
+        }
+
+        public EventData(int capacity) {
+            this.capacity = capacity;
+            this.guests = new ArrayList<>();
+        }
+
+        public EventData(int capacity, String[] guests) {
+            this.capacity = capacity;
+            this.guests = new ArrayList<String>(Arrays.asList(guests));
+        }
+
+        public void addGuest(String id) {
+            this.guests.add(id);
+            this.capacity--;
+        }
+
+        public void removeGuest(String id) {
+            this.guests.remove(id);
+            this.capacity++;
+        }
+
+        @Override
+        public String toString() {
+            return "capacity: " + String.valueOf(this.capacity) + " guests: " + this.guests.toString();
+        }
+    }
+
     public static enum Permission {
         // regular permissions
         reserve("reserve",
@@ -30,6 +68,7 @@ public interface IServer extends Remote {
 
     public static final EnumSet<Permission> BasicPermissions = EnumSet.of(Permission.reserve, Permission.get,
             Permission.cancel, Permission.exit);
+    public static final EnumSet<Permission> AdminPermissions = EnumSet.allOf(Permission.class);
 
     public enum EventType {
         Arts,
@@ -97,6 +136,12 @@ public interface IServer extends Remote {
     // !!!!!!! TESTING ONLY
 
     // Server Operations
+    public HashMap<String, EventData> getServerData(UserInfo user, EventType eventType)
+            throws java.rmi.RemoteException, Exception;
+
+    public HashMap<EventType, HashMap<String, EventData>> getAllServerData(UserInfo user)
+            throws java.rmi.RemoteException, Exception;
+
     // Admin Operations
     public Response add(UserInfo user, String eventId, EventType eventType, int capacity)
             throws java.rmi.RemoteException;

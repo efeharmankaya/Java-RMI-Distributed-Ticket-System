@@ -12,7 +12,8 @@ public class ClientServer {
             String registryURL;
             UserInfo userInfo = getUserInfo();
 
-            registryURL = "rmi://localhost:" + String.valueOf(userInfo.server.PORT) + "/mtl";
+            registryURL = "rmi://localhost:" + String.valueOf(userInfo.server.PORT) + "/"
+                    + userInfo.server.name().toLowerCase();
             IServer server = (IServer) Naming.lookup(registryURL);
 
             String message = "";
@@ -47,15 +48,22 @@ public class ClientServer {
                         response = add(server, userInfo, inputCommands);
                     } else if (action.equalsIgnoreCase(IServer.Permission.remove.label)) {
                         response = remove(server, userInfo, inputCommands);
+                    } else if (action.equalsIgnoreCase(IServer.Permission.list.label)) {
+                        response = list(server, userInfo, inputCommands);
+                    } // regular operations
+                    else if (action.equalsIgnoreCase(IServer.Permission.reserve.label)) {
+                        response = reserve(server, userInfo, inputCommands);
                     }
+
                     if (response != null) {
                         System.out.println(response.message);
+                    } else {
+                        throw new Exception("Response == null, no response received from the server.");
                     }
 
-                } else {
+                } else if (!input.equalsIgnoreCase("exit")) {
                     System.out.println("Error: Invalid Input");
                 }
-
             }
 
         } catch (Exception e) {
@@ -100,15 +108,7 @@ public class ClientServer {
                     + IServer.Permission.add.message);
         }
 
-        String eString = inputCommands[2];
-        IServer.EventType eventType = IServer.EventType.None;
-        for (IServer.EventType e : IServer.EventType.values()) {
-            if (e.equals(IServer.EventType.None))
-                continue;
-            if (eString.equalsIgnoreCase(e.name())) {
-                eventType = e;
-            }
-        }
+        IServer.EventType eventType = eventFromString(inputCommands[2]);
         if (eventType.equals(IServer.EventType.None)) {
             return new IServer.Response("Invalid eventType | Options: " + IServer.EventType.values().toString());
         }
@@ -136,19 +136,9 @@ public class ClientServer {
         }
 
         // TODO possible eventType from string function (repeated in add function)
-        String eString = inputCommands[2];
-        IServer.EventType eventType = IServer.EventType.None;
-        for (IServer.EventType e : IServer.EventType.values()) {
-            if (e.equals(IServer.EventType.None))
-                continue;
-            if (eString.equalsIgnoreCase(e.name())) {
-                eventType = e;
-            }
-        }
-        if (eventType.equals(IServer.EventType.None)) {
-
+        IServer.EventType eventType = eventFromString(inputCommands[2]);
+        if (eventType.equals(IServer.EventType.None))
             return new IServer.Response("Invalid eventType | Options: " + Arrays.asList(IServer.EventType.values()));
-        }
 
         IServer.Response response;
         try {
@@ -157,5 +147,56 @@ public class ClientServer {
             return new IServer.Response("Remote Exception in REMOVE: " + e.getMessage());
         }
         return response;
+    }
+
+    public static IServer.Response list(IServer server, UserInfo user, String[] inputCommands) {
+        if (inputCommands.length != 2) {
+            return new IServer.Response("Invalid input parameters for 'list' | requires exactly 2 parameters | Note: "
+                    + IServer.Permission.list.message);
+        }
+
+        IServer.EventType eventType = eventFromString(inputCommands[1]);
+        if (eventType.equals(IServer.EventType.None))
+            return new IServer.Response("Invalid eventType | Options: " + Arrays.asList(IServer.EventType.values()));
+
+        IServer.Response response;
+        try {
+            response = server.list(user, eventType);
+        } catch (RemoteException e) {
+            return new IServer.Response("Remote Exception in LIST: " + e.getMessage());
+        }
+        return response;
+    }
+
+    public static IServer.Response reserve(IServer server, UserInfo user, String[] inputCommands) {
+        if (inputCommands.length != 4) {
+            return new IServer.Response(
+                    "Invalid input parameters for 'reserve' | requires exactly 4 parameters | Note: "
+                            + IServer.Permission.reserve.message);
+        }
+
+        IServer.EventType eventType = eventFromString(inputCommands[3]);
+        if (eventType.equals(IServer.EventType.None))
+            return new IServer.Response("Invalid eventType | Options: " + Arrays.asList(IServer.EventType.values()));
+
+        IServer.Response response;
+        try {
+            response = server.reserve(user, inputCommands[1], inputCommands[2], eventType);
+        } catch (RemoteException e) {
+            return new IServer.Response("Remote Exception in RESERVE: " + e.getMessage());
+        }
+        return response;
+    }
+
+    public static IServer.EventType eventFromString(String eString) {
+        IServer.EventType eventType = IServer.EventType.None;
+        for (IServer.EventType e : IServer.EventType.values()) {
+            if (e.equals(IServer.EventType.None))
+                continue;
+            if (eString.equalsIgnoreCase(e.name())) {
+                eventType = e;
+            }
+        }
+        return eventType;
     }
 }

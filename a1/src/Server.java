@@ -1,17 +1,20 @@
 import java.rmi.*;
 import java.rmi.server.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
 public class Server extends UnicastRemoteObject implements IServer {
     // possible string[] for child hashmap value? (currently only used by capacity)
-    private HashMap<EventType, HashMap<String, Integer>> serverData = new HashMap<>();
+    // possible ServerData type to clean up typing
+    // TODO add guest list to eventData ????
+    HashMap<EventType, HashMap<String, EventData>> serverData = new HashMap<>();
 
     public Server() throws RemoteException {
         super();
     }
 
-    public Server(HashMap<EventType, HashMap<String, Integer>> serverData) throws RemoteException {
+    public Server(HashMap<EventType, HashMap<String, EventData>> serverData) throws RemoteException {
         super();
         this.serverData = serverData;
     }
@@ -37,12 +40,12 @@ public class Server extends UnicastRemoteObject implements IServer {
     // !!!!!!! TESTING ONLY
     public String show() {
         StringBuffer s = new StringBuffer();
-        for (Map.Entry<EventType, HashMap<String, Integer>> x : this.serverData.entrySet()) {
+        for (Map.Entry<EventType, HashMap<String, EventData>> x : this.serverData.entrySet()) {
             EventType e = x.getKey();
-            HashMap<String, Integer> event = x.getValue();
+            HashMap<String, EventData> event = x.getValue();
             s.append(e.name() + "\n");
-            for (Map.Entry<String, Integer> c : event.entrySet()) {
-                s.append(String.format("\t%s : %d\n", c.getKey(), c.getValue()));
+            for (Map.Entry<String, EventData> c : event.entrySet()) {
+                s.append(String.format("\t%s : %s\n", c.getKey(), c.getValue().toString()));
             }
         }
         return s.toString();
@@ -57,12 +60,11 @@ public class Server extends UnicastRemoteObject implements IServer {
                     "User doesn't have valid permissions to access : " + Permission.add.label.toUpperCase());
         }
 
-        HashMap<String, Integer> events = this.serverData.get(eventType);
-        if (events.containsKey(eventId)) {
+        HashMap<String, EventData> events = this.serverData.get(eventType);
+        if (events.containsKey(eventId))
             return new Response(String.format("Unable to add eventId: %s as it already exists.", eventId));
-        }
 
-        events.put(eventId, capacity);
+        events.put(eventId, new EventData(capacity));
         this.serverData.put(eventType, events);
         return new Response(String.format("Successfully added eventId: %s", eventId));
     }
@@ -73,7 +75,13 @@ public class Server extends UnicastRemoteObject implements IServer {
                     "User doesn't have valid permissions to access : " + Permission.remove.label.toUpperCase());
         }
 
-        return new Response("REMOVE: Good for now");
+        HashMap<String, EventData> events = this.serverData.get(eventType);
+        if (!events.containsKey(eventId))
+            return new Response("Unable to remove event: eventId does not exist");
+
+        events.remove(eventId);
+        this.serverData.put(eventType, events);
+        return new Response(String.format("Successfully removed eventId: %s", eventId));
     }
 
     public Response list(UserInfo user, EventType eventType) {
@@ -82,7 +90,33 @@ public class Server extends UnicastRemoteObject implements IServer {
                     "User doesn't have valid permissions to access : " + Permission.list.label.toUpperCase());
         }
 
-        return new Response("LIST: Good for now");
+        HashMap<ServerPort, HashMap<String, EventData>> data = new HashMap<>() {
+            {
+                put(user.server, serverData.get(eventType));
+            }
+        };
+
+        try {
+            for (ServerPort s : ServerPort.values()) {
+                if (s.PORT == -1)
+                    continue;
+                if (s.PORT == user.server.PORT)
+                    continue;
+
+                String registryURL = "rmi://localhost:" + String.valueOf(s.PORT) + "/" + s.name().toLowerCase();
+                IServer curServer = (IServer) Naming.lookup(registryURL);
+                try {
+                    HashMap<String, EventData> eventData = curServer.getServerData(user, eventType);
+                    data.put(s, eventData);
+                } catch (Exception e) {
+                    System.out.println("Exception in LIST: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Exception in LIST - obtaining rmi lookup: " + e.getMessage());
+        }
+
+        return new Response(data.toString());
     }
 
     // Regular Operations
@@ -92,7 +126,35 @@ public class Server extends UnicastRemoteObject implements IServer {
                     "User doesn't have valid permissions to access : " + Permission.reserve.label.toUpperCase());
         }
 
-        return new Response("RESERVE: Good for now");
+        HashMap<String, EventData> eventData = this.serverData.get(eventType);
+        if (!eventData.containsKey(eventId))
+            return new Response(String.format("Unable to reserve eventId: %s - Does not exist.", eventId));
+
+        if (eventData.get(eventId).capacity < 1)
+            return new Response(String.format("Unable to reserve eventID: %s - No remaining tickets.", eventId));
+
+        if (eventData.get(eventId).guests.contains(id))
+            return new Response(String.format(
+                    "Unable to reserve eventId: %s for clientId: %s - Client already has a reservation", eventId, id));
+
+        eventData.get(eventId).addGuest(id);
+        return new Response(String.format("Successfully reserved eventType: %s eventId: %s for clientId: %s",
+                eventType.name(), eventId, id));
+    }
+
+    private String[] getEventsById(HashMap<EventType, HashMap<String, EventData>> serverData, String id) {
+        ArrayList<String> clientEvents = new ArrayList<>();
+        for (EventType eventType : EventType.values()) {
+            if (eventType.equals(EventType.None))
+                continue;
+
+            HashMap<String, EventData> events = serverData.get(eventType);
+            for (Map.Entry<String, EventData> event : events.entrySet()) {
+                if (event.getValue().guests.contains(id))
+                    clientEvents.add(event.getKey());
+            }
+        }
+        return clientEvents.toArray(new String[0]);
     }
 
     public Response get(UserInfo user, String id) {
@@ -101,7 +163,31 @@ public class Server extends UnicastRemoteObject implements IServer {
                     "User doesn't have valid permissions to access : " + Permission.get.label.toUpperCase());
         }
 
-        return new Response("GET: Good for now");
+        // current server parsing
+        HashMap<String, String[]> clientEvents = new HashMap<>();
+        try {
+            for (ServerPort s : ServerPort.values()) {
+                if (s.PORT == -1)
+                    continue;
+
+                if (s.PORT == user.server.PORT) { // current server
+                    clientEvents.put(s.name(), getEventsById(this.serverData, id));
+                } else { // remote server
+                    String registryURL = "rmi://localhost:" + String.valueOf(s.PORT) + "/" + s.name().toLowerCase();
+                    IServer remServer = (IServer) Naming.lookup(registryURL);
+                    try {
+                        HashMap<EventType, HashMap<String, EventData>> remData = remServer.getAllServerData(user);
+                        clientEvents.put(s.name(), getEventsById(remData, id));
+                    } catch (Exception e) {
+                        System.out.println("Exception in get - during inter-server connection: " + e.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Exception in get: " + e.getMessage());
+        }
+
+        return new Response(clientEvents.toString());
     }
 
     public Response cancel(UserInfo user, String id, String eventId) {
@@ -112,4 +198,23 @@ public class Server extends UnicastRemoteObject implements IServer {
 
         return new Response("CANCEL: Good for now");
     }
+
+    // possible
+    // remove these functions
+    // replace with regular calling of the function in remote w/ additional param
+    // (ie. set state) to stop recursion
+    // and just return the called servers info
+    public HashMap<EventType, HashMap<String, EventData>> getAllServerData(UserInfo user) throws Exception {
+        if (!user.isAdmin())
+            throw new Exception("Invalid permissions to access private server data");
+        return this.serverData;
+    }
+
+    public HashMap<String, EventData> getServerData(UserInfo user, EventType eventType) throws Exception {
+        if (!user.isAdmin()) {
+            throw new Exception("Invalid permissions to access private server data");
+        }
+        return this.serverData.get(eventType);
+    }
+
 }
