@@ -84,6 +84,7 @@ public class Server extends UnicastRemoteObject implements IServer {
         return new Response(String.format("Successfully removed eventId: %s", eventId));
     }
 
+    // TODO pretty show
     public Response list(UserInfo user, EventType eventType) {
         if (!user.hasPermission(Permission.list)) {
             return new Response(
@@ -199,6 +200,7 @@ public class Server extends UnicastRemoteObject implements IServer {
                     "User doesn't have valid permissions to access : " + Permission.cancel.label.toUpperCase());
         }
 
+        // TODO cannot cancel unless (admin or user === ticket holder)
         // (key, value) => (eventType, eventData HashMap)
         for (Map.Entry<EventType, HashMap<String, EventData>> event : this.serverData.entrySet()) {
             // (key, value) => (eventId, eventData)

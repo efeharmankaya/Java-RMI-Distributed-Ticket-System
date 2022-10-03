@@ -1,16 +1,24 @@
 import java.io.*;
+import java.lang.System.Logger;
 import java.rmi.*;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.lang.System.Logger.Level;
 
 public class ClientServer {
     static InputStreamReader is = new InputStreamReader(System.in);
     static BufferedReader br = new BufferedReader(is);
+    // https://stackoverflow.com/questions/15758685/how-to-write-logs-in-text-file-when-using-java-util-logging-logger
+    static Logger logger;
 
     public static void main(String[] args) {
         try {
             String registryURL;
             UserInfo userInfo = getUserInfo();
+
+            // logging tests
+            logger = System.getLogger(userInfo.clientId);
+            logger.log(Level.INFO, userInfo.clientId);
 
             registryURL = "rmi://localhost:" + String.valueOf(userInfo.server.PORT) + "/"
                     + userInfo.server.name().toLowerCase();
@@ -120,8 +128,10 @@ public class ClientServer {
         int capacity;
         try {
             capacity = Integer.parseInt(inputCommands[3]);
+            if (capacity < 0)
+                throw new NumberFormatException();
         } catch (NumberFormatException e) {
-            return new IServer.Response("Invalid capacity | Must be of type int");
+            return new IServer.Response("Invalid capacity | Must be of type int >= 0");
         }
 
         IServer.Response response;
