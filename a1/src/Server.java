@@ -100,7 +100,7 @@ public class Server extends UnicastRemoteObject implements IServer {
                 }
             }
         }
-        // invalid eventId (doesn't match <SERVERNAME>ID pattern)
+        // invalid eventId (doesn't match <SERVER-NAME>ID pattern)
         return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
     }
 
@@ -138,7 +138,7 @@ public class Server extends UnicastRemoteObject implements IServer {
                 }
             }
         }
-        // invalid eventId (doesn't match <SERVERNAME>ID pattern)
+        // invalid eventId (doesn't match <SERVER-NAME>ID pattern)
         return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
     }
 
@@ -172,7 +172,6 @@ public class Server extends UnicastRemoteObject implements IServer {
     }
 
     // Regular Operations
-    // TODO add remote server reservation + check for reservations <= 3 for remote
     public Response reserve(UserInfo user, String id, String eventId, EventType eventType) {
         if (!user.hasPermission(Permission.reserve)) {
             return new Response(
@@ -192,6 +191,18 @@ public class Server extends UnicastRemoteObject implements IServer {
                 return new Response(String.format(
                         "Unable to reserve eventId: %s for clientId: %s - Client already has a reservation", eventId,
                         id));
+
+            // check if called through remote server - to ensure max 3 remote reservations
+            if (!eventLocationId.equalsIgnoreCase(user.server.name())) {
+                int count = 0;
+                // (eventId, EventData)
+                for (Map.Entry<String, EventData> e : this.serverData.get(eventType).entrySet()) {
+                    if (e.getValue().guests.contains(id))
+                        count++;
+                }
+                if (++count > 3)
+                    return new Response("Unable to reserve event - Maximum of 3 remote reservations per city.");
+            }
 
             eventData.get(eventId).addGuest(id);
             return new Response(String.format("Successfully reserved eventType: %s eventId: %s for clientId: %s",
@@ -214,27 +225,9 @@ public class Server extends UnicastRemoteObject implements IServer {
             }
         }
 
-        // invalid eventId (doesn't match <SERVERNAME>ID pattern)
+        // invalid eventId (doesn't match <SERVER-NAME>ID pattern)
         return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
     }
-
-    // private HashMap<EventType, ArrayList<String>> getEventsById(
-    // HashMap<EventType, HashMap<String, EventData>> serverData, String id) {
-    // HashMap<EventType, ArrayList<String>> clientEvents = new HashMap();
-    // for (EventType eventType : EventType.values()) {
-    // if (eventType.equals(EventType.None))
-    // continue;
-
-    // ArrayList<String> tempEvents = new ArrayList<>();
-    // HashMap<String, EventData> events = serverData.get(eventType);
-    // for (Map.Entry<String, EventData> event : events.entrySet()) {
-    // if (event.getValue().guests.contains(id))
-    // tempEvents.add(event.getKey());
-    // }
-    // clientEvents.put(eventType, tempEvents);
-    // }
-    // return clientEvents;
-    // }
 
     private String getEventsById(String id) {
         StringBuilder events = new StringBuilder(this.name);
@@ -289,22 +282,48 @@ public class Server extends UnicastRemoteObject implements IServer {
             return new Response(
                     "User doesn't have valid permissions to access : " + Permission.cancel.label.toUpperCase());
         }
+        String eventLocationId = eventId.substring(0, 3);
+        // operation on current server
+        if (eventLocationId.equalsIgnoreCase(this.name)) {
+            // (key, value) => (eventType, eventData HashMap)
+            for (Map.Entry<EventType, HashMap<String, EventData>> event : this.serverData.entrySet()) {
+                // (key, value) => (eventId, eventData)
+                for (Map.Entry<String, EventData> eventData : event.getValue().entrySet()) {
+                    if (eventData.getKey().equalsIgnoreCase(eventId)) {
+                        if (!eventData.getValue().guests.contains(id))
+                            return new Response(String.format(
+                                    "Unable to cancel ticket - %s does not have a reservation for %s", id, eventId));
 
-        // TODO cannot cancel unless (admin or user === ticket holder)
-        // (key, value) => (eventType, eventData HashMap)
-        for (Map.Entry<EventType, HashMap<String, EventData>> event : this.serverData.entrySet()) {
-            // (key, value) => (eventId, eventData)
-            for (Map.Entry<String, EventData> eventData : event.getValue().entrySet()) {
-                if (eventData.getKey().equalsIgnoreCase(eventId)) {
-                    if (!eventData.getValue().guests.contains(id))
-                        return new Response(String.format(
-                                "Unable to cancel ticket - %s does not have a reservation for %s", id, eventId));
-                    this.serverData.get(event.getKey()).get(eventData.getKey()).removeGuest(id);
-                    return new Response("Successfully canceled the ticket");
+                        if (!user.clientId.equalsIgnoreCase(id) && !user.isAdmin()) // user != ticket holder && !admin
+                            return new Response(
+                                    "Unable to cancel the ticket - Tickets must be cancelled by the original ticket holder.");
+
+                        this.serverData.get(event.getKey()).get(eventData.getKey()).removeGuest(id);
+                        return new Response("Successfully canceled the ticket for eventId: " + eventId, true);
+                    }
+                }
+            }
+            return new Response("Unable to cancel ticket - eventId does not exist.");
+        }
+
+        // operation on remote server
+        for (ServerPort s : ServerPort.values()) {
+            if (s.PORT == -1 || s.PORT == user.server.PORT)
+                continue;
+            if (eventLocationId.equalsIgnoreCase(s.name())) { // found remote server
+                try {
+                    String registryURL = "rmi://localhost:" + String.valueOf(s.PORT) + "/" + s.name().toLowerCase();
+                    IServer remServer = (IServer) Naming.lookup(registryURL);
+                    return remServer.cancel(user, id, eventId);
+                } catch (Exception e) {
+                    System.out.println("Exception in cancel on remote server: " + e.getMessage());
+                    return new Response("Exception in cancel on remote server: " + e.getMessage());
                 }
             }
         }
 
-        return new Response("Unable to cancel ticket - eventId does not exist.");
+        // invalid eventId (doesn't match <SERVER-NAME>ID pattern)
+        return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
+
     }
 }
