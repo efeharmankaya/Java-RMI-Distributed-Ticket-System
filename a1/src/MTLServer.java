@@ -41,7 +41,7 @@ public class MTLServer {
                 }
             };
 
-            Server serverObj = new Server(initialServerData);
+            Server serverObj = new Server("mtl", initialServerData);
             registryURL = "rmi://localhost:" + PORT_NUM + "/mtl";
             Naming.rebind(registryURL, serverObj);
             System.out.println("Server registered.  Registry currently contains:");

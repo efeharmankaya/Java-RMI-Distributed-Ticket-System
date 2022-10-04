@@ -40,7 +40,7 @@ public class TORServer {
                 }
             };
 
-            Server serverObj = new Server(initialServerData);
+            Server serverObj = new Server("tor", initialServerData);
             registryURL = "rmi://localhost:" + PORT_NUM + "/tor";
             Naming.rebind(registryURL, serverObj);
             System.out.println("Server registered.  Registry currently contains:");

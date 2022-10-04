@@ -37,7 +37,7 @@ public interface IServer extends Remote {
 
         @Override
         public String toString() {
-            return "capacity: " + String.valueOf(this.capacity) + " guests: " + this.guests.toString();
+            return "\tcapacity: " + String.valueOf(this.capacity) + " guests: " + this.guests.toString();
         }
     }
 
@@ -118,12 +118,19 @@ public interface IServer extends Remote {
         }
     }
 
-    // TODO Reponse<T> for additional message args?
+    // TODO set all response correct status
     public class Response implements Serializable {
         String message;
+        boolean status;
 
         public Response(String message) {
             this.message = message;
+            this.status = false;
+        }
+
+        public Response(String message, boolean status) {
+            this.message = message;
+            this.status = status;
         }
     }
 
@@ -136,12 +143,6 @@ public interface IServer extends Remote {
     // !!!!!!! TESTING ONLY
 
     // Server Operations
-    public HashMap<String, EventData> getServerData(UserInfo user, EventType eventType)
-            throws java.rmi.RemoteException, Exception;
-
-    public HashMap<EventType, HashMap<String, EventData>> getAllServerData(UserInfo user)
-            throws java.rmi.RemoteException, Exception;
-
     // Admin Operations
     public Response add(UserInfo user, String eventId, EventType eventType, int capacity)
             throws java.rmi.RemoteException;

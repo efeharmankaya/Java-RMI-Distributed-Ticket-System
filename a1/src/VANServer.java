@@ -40,7 +40,7 @@ public class VANServer {
                 }
             };
 
-            Server serverObj = new Server(initialServerData);
+            Server serverObj = new Server("van", initialServerData);
             registryURL = "rmi://localhost:" + PORT_NUM + "/van";
             Naming.rebind(registryURL, serverObj);
             System.out.println("Server registered.  Registry currently contains:");
