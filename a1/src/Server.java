@@ -5,9 +5,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Server extends UnicastRemoteObject implements IServer {
-    // possible string[] for child hashmap value? (currently only used by capacity)
-    // possible ServerData type to clean up typing
-    // TODO add guest list to eventData ????
     HashMap<EventType, HashMap<String, EventData>> serverData = new HashMap<>();
     public String name;
 
@@ -142,7 +139,6 @@ public class Server extends UnicastRemoteObject implements IServer {
         return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
     }
 
-    // TODO pretty show
     public Response list(UserInfo user, EventType eventType) {
         if (!user.hasPermission(Permission.list)) {
             return new Response(

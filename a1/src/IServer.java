@@ -96,7 +96,6 @@ public interface IServer extends Remote {
         }
     }
 
-    // TODO hasPermission - in user or server?
     public class ClientPermissions implements Serializable {
         ClientType type;
         EnumSet<Permission> permissions;
@@ -118,7 +117,6 @@ public interface IServer extends Remote {
         }
     }
 
-    // TODO set all response correct status
     public class Response implements Serializable {
         String message;
         boolean status;

@@ -13,7 +13,6 @@ public class MTLServer {
         try {
             startRegistry(PORT_NUM);
             // STARTING MTL SERVER DATA
-            // TODO add guests
             HashMap<IServer.EventType, HashMap<String, IServer.EventData>> initialServerData = new HashMap<>() {
                 {
                     put(IServer.EventType.Arts, new HashMap<>() {

@@ -25,7 +25,6 @@ public class UserInfo implements Serializable {
             return;
         this.clientId = clientId;
         String location = clientId.substring(0, 3);
-        // ? TODO: check if other occurrences of this can be deleted
         for (IServer.ServerPort server : IServer.ServerPort.values())
             if (location.equalsIgnoreCase(server.name()))
                 this.server = server;

@@ -29,7 +29,6 @@ public class ClientServer {
             IServer.Response response = null;
 
             while (!input.equalsIgnoreCase("exit")) {
-                // TODO add input param to getMessage
                 if (message.isEmpty() && input.isEmpty())
                     message = server.getIntroMessage(userInfo);
                 else
@@ -108,9 +107,6 @@ public class ClientServer {
             if (!user.validate())
                 System.out.println("Invalid client ID | try again\n");
         }
-        // ! Testing
-        // System.out.println("USER");
-        // System.out.println(user.toString());
         return user;
     }
 
@@ -149,7 +145,6 @@ public class ClientServer {
                     + IServer.Permission.remove.message);
         }
 
-        // TODO possible eventType from string function (repeated in add function)
         IServer.EventType eventType = eventFromString(inputCommands[2]);
         if (eventType.equals(IServer.EventType.None))
             return new IServer.Response("Invalid eventType | Options: " + Arrays.asList(IServer.EventType.values()));
