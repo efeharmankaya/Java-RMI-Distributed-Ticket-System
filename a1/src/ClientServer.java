@@ -20,6 +20,7 @@ public class ClientServer {
     static FileHandler fh;
 
     // TODO delete udp in client
+    // TODO + clean up all other udp functions
     UDPClient udp = new UDPClient();
 
     public static void main(String[] args) {

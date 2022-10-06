@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.Set;
 
 public interface IServer extends Remote {
-    // TODO Serializable???
     class EventData implements Serializable {
         int capacity;
         ArrayList<String> guests;
@@ -150,10 +149,16 @@ public interface IServer extends Remote {
         }
     }
 
-    // TODO cancel? + others if simple implementation
     public enum ServerAction implements Serializable {
+        // admin
+        add,
+        remove,
         list,
-        reserve;
+
+        // regular
+        reserve,
+        get,
+        cancel;
     }
 
     public class ServerRequest implements Serializable {
@@ -161,8 +166,11 @@ public interface IServer extends Remote {
         UserInfo user;
         String eventType;
 
-        // only ServerAction.reserve
-        String id = "", eventId = "";
+        String id = "";
+        String eventId = "";
+
+        // only ServerAction.add
+        int capacity = 0;
 
         // construct ServerAction.list
         public ServerRequest(ServerAction type, UserInfo user, String eventType) {
@@ -171,13 +179,78 @@ public interface IServer extends Remote {
             this.eventType = eventType;
         }
 
+        // construct ServerAction.get
+        // note - differentiating bool added from list
+        public ServerRequest(ServerAction type, UserInfo user, String id, boolean _unused) {
+            this.type = type;
+            this.user = user;
+            this.id = id;
+        }
+
+        // construct ServerAction.remove
+        public ServerRequest(ServerAction type, UserInfo user, String eventType, String eventId) {
+            this.type = type;
+            this.user = user;
+            this.eventType = eventType;
+            this.eventId = eventId;
+        }
+
         // construct ServerAction.reserve
+        // construct ServerAction.cancel
         public ServerRequest(ServerAction type, UserInfo user, String eventType, String id, String eventId) {
             this.type = type;
             this.user = user;
             this.eventType = eventType;
             this.id = id;
             this.eventId = eventId;
+        }
+
+        // construct ServerAction.add
+        public ServerRequest(ServerAction type, UserInfo user, String eventType, String eventId, int capacity) {
+            this.type = type;
+            this.user = user;
+            this.eventType = eventType;
+            this.eventId = eventId;
+            this.capacity = capacity;
+        }
+
+    }
+
+    // admin
+    public class ListRequest extends ServerRequest {
+        public ListRequest(UserInfo user, String eventType) {
+            super(ServerAction.list, user, eventType);
+        }
+    }
+
+    public class AddRequest extends ServerRequest {
+        public AddRequest(UserInfo user, String eventType, String eventId, int capacity) {
+            super(ServerAction.add, user, eventType, eventId, capacity);
+        }
+    }
+
+    public class RemoveRequest extends ServerRequest {
+        public RemoveRequest(UserInfo user, String eventType, String eventId) {
+            super(ServerAction.remove, user, eventType, eventId);
+        }
+    }
+
+    // regular
+    public class ReserveRequest extends ServerRequest {
+        public ReserveRequest(UserInfo user, String eventType, String id, String eventId) {
+            super(ServerAction.reserve, user, eventType, id, eventId);
+        }
+    }
+
+    public class GetRequest extends ServerRequest {
+        public GetRequest(UserInfo user, String id) {
+            super(ServerAction.get, user, id, true);
+        }
+    }
+
+    public class CancelRequest extends ServerRequest {
+        public CancelRequest(UserInfo user, String id, String eventId) {
+            super(ServerAction.cancel, user, "", id, eventId);
         }
     }
 
