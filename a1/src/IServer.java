@@ -6,6 +6,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 
 public interface IServer extends Remote {
+    // TODO Serializable???
     class EventData implements Serializable {
         int capacity;
         ArrayList<String> guests;
@@ -41,7 +42,7 @@ public interface IServer extends Remote {
         }
     }
 
-    public static enum Permission {
+    public static enum Permission implements Serializable {
         // regular permissions
         reserve("reserve",
                 "reserve clientID eventID eventType - Reserves a ticket for a given clientID at the given eventID\n"),
@@ -70,14 +71,14 @@ public interface IServer extends Remote {
             Permission.cancel, Permission.exit);
     public static final EnumSet<Permission> AdminPermissions = EnumSet.allOf(Permission.class);
 
-    public enum EventType {
+    public enum EventType implements Serializable {
         Arts,
         Theatre,
         Concert,
         None;
     };
 
-    public static enum ServerPort {
+    public static enum ServerPort implements Serializable {
         MTL(1111),
         TOR(1112),
         VAN(1113),
@@ -106,7 +107,7 @@ public interface IServer extends Remote {
         }
     }
 
-    public static enum ClientType {
+    public static enum ClientType implements Serializable {
         A('A'),
         P('P');
 
@@ -121,6 +122,11 @@ public interface IServer extends Remote {
         String message;
         boolean status;
 
+        public Response() {
+            this.message = "";
+            this.status = false;
+        }
+
         public Response(String message) {
             this.message = message;
             this.status = false;
@@ -130,11 +136,30 @@ public interface IServer extends Remote {
             this.message = message;
             this.status = status;
         }
+
+        public boolean isEmpty() {
+            return this.message.isEmpty();
+        }
     }
 
-    public String getIntroMessage(UserInfo user) throws java.rmi.RemoteException;
+    public enum ServerActions implements Serializable {
+        list,
+        reserve;
+    }
 
-    public String getUserOptions(UserInfo user) throws java.rmi.RemoteException;
+    public class ServerRequest implements Serializable {
+        UserInfo user;
+        String eventType;
+
+        public ServerRequest(UserInfo user, String eventType) {
+            this.user = user;
+            this.eventType = eventType;
+        }
+    }
+
+    public Response getIntroMessage(UserInfo user) throws java.rmi.RemoteException;
+
+    public Response getUserOptions(UserInfo user) throws java.rmi.RemoteException;
 
     // !!!!!!! TESTING ONLY
     public String show() throws java.rmi.RemoteException;

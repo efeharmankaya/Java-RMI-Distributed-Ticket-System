@@ -1,39 +1,79 @@
 import java.io.*;
-import java.lang.System.Logger;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.rmi.*;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.lang.System.Logger.Level;
+import java.util.logging.*;
+
+// TODO concurrency within city servers
+// TODO UDP/IP inter-server communication instead of rmi
+//https://www.baeldung.com/udp-in-java
 
 public class ClientServer {
     static InputStreamReader is = new InputStreamReader(System.in);
     static BufferedReader br = new BufferedReader(is);
-    // https://stackoverflow.com/questions/15758685/how-to-write-logs-in-text-file-when-using-java-util-logging-logger
-    static Logger logger;
+
+    // Logging
+    static Logger logger = Logger.getLogger(ClientServer.class.getSimpleName());
+    static FileHandler fh;
+
+    // TODO delete udp in client
+    UDPClient udp = new UDPClient();
 
     public static void main(String[] args) {
         try {
+            new ClientServer().start();
+        } catch (Exception e) {
+            System.out.println("Exception in main: " + e.getMessage());
+        }
+    }
+
+    public void start() {
+        try {
+
             String registryURL;
             UserInfo userInfo = getUserInfo();
-
-            // logging tests
-            logger = System.getLogger(userInfo.clientId);
-            logger.log(Level.INFO, userInfo.clientId);
-
+            // Logging setup
+            fh = new FileHandler(String.format("logs/client/%s.log", userInfo.clientId));
+            logger.addHandler(fh);
+            SimpleFormatter formatter = new SimpleFormatter();
+            fh.setFormatter(formatter);
+            logger.setUseParentHandlers(false);
+            logger.info(String.format("""
+                        %s logged in
+                    """, userInfo.clientId));
             registryURL = "rmi://localhost:" + String.valueOf(userInfo.server.PORT) + "/"
                     + userInfo.server.name().toLowerCase();
             IServer server = (IServer) Naming.lookup(registryURL);
 
-            String message = "";
+            logger.info(String.format("Connected to %s at Port: %s\n", userInfo.server.name().toUpperCase(),
+                    userInfo.server.PORT));
+
+            IServer.Response message = new IServer.Response();
             String input = "";
             IServer.Response response = null;
 
             while (!input.equalsIgnoreCase("exit")) {
-                if (message.isEmpty() && input.isEmpty())
+                if (message.isEmpty() && input.isEmpty()) {
                     message = server.getIntroMessage(userInfo);
-                else
+                    logger.info(String.format("""
+                            Requested intro message from the server
+                            Parameters: UserInfo
+                            Completed: %s
+                            Response: %s
+                            """, message.status, message.message));
+                } else {
                     message = server.getUserOptions(userInfo);
-                input = getUserInput(message);
+                    logger.info(String.format("""
+                                Requested options message from the server
+                                Parameters: UserInfo
+                                Completed: %s
+                                Response: %s
+                            """, message.status, message.message));
+                }
+                input = getUserInput(message.message);
 
                 // !!!!!!! TESTING ONLY
                 if (input.equalsIgnoreCase("x")) {
@@ -44,6 +84,12 @@ public class ClientServer {
                     } catch (RemoteException e) {
                         System.out.println("Show remote exception: " + e.getMessage());
                     }
+                    continue;
+                }
+
+                if (input.equalsIgnoreCase("send")) {
+                    IServer.Response res = udp.sendMessage("Testing");
+                    System.out.println("RESPONSE FROM UDP: " + res);
                     continue;
                 }
                 // !!!!!!! TESTING ONLY
@@ -66,8 +112,9 @@ public class ClientServer {
                         response = cancel(server, userInfo, inputCommands);
                     }
 
-                    if (response != null) {
+                    if (response != null && !response.isEmpty()) {
                         System.out.println(response.message);
+                        logEvent(userInfo, inputCommands, response);
                     } else {
                         throw new Exception("Response == null, no response received from the server.");
                     }
@@ -76,9 +123,44 @@ public class ClientServer {
                     System.out.println("Error: Invalid Input");
                 }
             }
-
+            fh.close();
         } catch (Exception e) {
             System.out.println("Error in ClientServer: " + e.getMessage());
+        }
+    }
+
+    public class UDPClient {
+        DatagramSocket socket;
+        InetAddress address;
+        byte[] buffer;
+
+        public UDPClient() {
+            try {
+                this.socket = new DatagramSocket();
+                this.address = InetAddress.getByName("localhost");
+            } catch (Exception e) {
+                System.out.println("Exception in UDPClient constructor: " + e.getMessage());
+                return;
+            }
+        }
+
+        // TODO try singular function to parse through required data from send and
+        // return needed data
+        public IServer.Response sendMessage(String message) {
+            try {
+                this.buffer = message.getBytes();
+                DatagramPacket packet = new DatagramPacket(this.buffer, this.buffer.length, this.address, 2111); // temp
+                                                                                                                 // for
+                                                                                                                 // mtl
+                this.socket.send(packet);
+                packet = new DatagramPacket(this.buffer, this.buffer.length);
+                this.socket.receive(packet);
+                String response = new String(packet.getData(), 0, packet.getLength());
+                return new IServer.Response(response);
+            } catch (Exception e) {
+                System.out.println("Exception in UDPClient sendMessage: " + e.getMessage());
+                return new IServer.Response("Exception in UDPClient sendMessage: " + e.getMessage());
+            }
         }
     }
 
@@ -237,5 +319,18 @@ public class ClientServer {
             }
         }
         return eventType;
+    }
+
+    public static void logEvent(UserInfo user, String[] inputCommands, IServer.Response response) {
+        logger.info(String.format("""
+
+                    Calling user: %s
+                    Requested %s from server
+                    Parameters: %s
+                    Completed: %s
+                    Response:
+                %s
+                """, user.clientId, inputCommands[0].toUpperCase(), inputCommands.toString(), response.status,
+                response.message));
     }
 }

@@ -2,6 +2,11 @@
 *.class
 # Log file
 *.log
+*.lck
+logs
+
+# Env
+*.args
 
 # BlueJ files
 *.ctxt
