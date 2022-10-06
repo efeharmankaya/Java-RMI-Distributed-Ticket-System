@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Set;
 
 public interface IServer extends Remote {
     // TODO Serializable???
@@ -36,9 +37,16 @@ public interface IServer extends Remote {
             this.capacity++;
         }
 
+        private String getGuests() {
+            if (this.guests.size() == 0)
+                return "N/A";
+
+            return this.guests.toString();
+        }
+
         @Override
         public String toString() {
-            return "\tcapacity: " + String.valueOf(this.capacity) + " guests: " + this.guests.toString();
+            return "\tcapacity: " + String.valueOf(this.capacity) + " guests: " + this.getGuests();
         }
     }
 
@@ -142,18 +150,34 @@ public interface IServer extends Remote {
         }
     }
 
-    public enum ServerActions implements Serializable {
+    // TODO cancel? + others if simple implementation
+    public enum ServerAction implements Serializable {
         list,
         reserve;
     }
 
     public class ServerRequest implements Serializable {
+        ServerAction type;
         UserInfo user;
         String eventType;
 
-        public ServerRequest(UserInfo user, String eventType) {
+        // only ServerAction.reserve
+        String id = "", eventId = "";
+
+        // construct ServerAction.list
+        public ServerRequest(ServerAction type, UserInfo user, String eventType) {
+            this.type = type;
             this.user = user;
             this.eventType = eventType;
+        }
+
+        // construct ServerAction.reserve
+        public ServerRequest(ServerAction type, UserInfo user, String eventType, String id, String eventId) {
+            this.type = type;
+            this.user = user;
+            this.eventType = eventType;
+            this.id = id;
+            this.eventId = eventId;
         }
     }
 

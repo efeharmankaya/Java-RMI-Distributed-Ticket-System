@@ -21,7 +21,6 @@ public class Server extends UnicastRemoteObject implements IServer {
 
     HashMap<EventType, HashMap<String, EventData>> serverData = new HashMap<>();
     public String name;
-    int UDPPort;
 
     public Server(String name) throws RemoteException {
         super();
@@ -38,8 +37,7 @@ public class Server extends UnicastRemoteObject implements IServer {
         SimpleFormatter formatter = new SimpleFormatter();
         this.fh.setFormatter(formatter);
         this.logger.setUseParentHandlers(false);
-        // this.UDPPort = getUDPPort();
-        this.udp = new UDP(getUDPPort());
+        this.udp = new UDP(this, getUDPPort());
         this.udp.start();
     }
 
@@ -58,19 +56,19 @@ public class Server extends UnicastRemoteObject implements IServer {
         SimpleFormatter formatter = new SimpleFormatter();
         this.fh.setFormatter(formatter);
         this.logger.setUseParentHandlers(false);
-        // this.UDPPort = getUDPPort();
-        this.udp = new UDP(getUDPPort());
+        this.udp = new UDP(this, getUDPPort());
         this.udp.start();
     }
 
     public class UDP extends Thread {
         boolean running;
         DatagramSocket socket;
-        // byte[] buffer = new byte[256];
+        Server server;
         int port;
 
-        public UDP(int port) {
+        public UDP(Server server, int port) {
             super();
+            this.server = server;
             this.running = true;
             this.port = port;
             try {
@@ -79,21 +77,9 @@ public class Server extends UnicastRemoteObject implements IServer {
                 System.out.println("Exception in UDPServer creating DatagramSocket: " + e.getMessage());
                 return;
             }
-            // try {
-            // this.socket = new DatagramSocket(this.port);
-            // } catch (Exception e) {
-            // System.out.println("Exception in UDPServer creating DatagramSocket: " +
-            // e.getMessage());
-            // return;
-            // }
         }
 
-        // public Response receiveRequest(ServerRequest request) {
-
-        // }
-
         public void run() {
-            // DatagramSocket socket = new DatagramSocket(this.port);
             while (running) {
                 try {
 
@@ -120,68 +106,36 @@ public class Server extends UnicastRemoteObject implements IServer {
                     System.out.println("Received request: " + request.user.clientId);
                     System.out.println("Received request: " + request.eventType);
 
-                    // System.out.println("Received request: " + request.message);
-
                     // parse return address
                     InetAddress address = packet.getAddress();
                     int port = packet.getPort();
 
-                    Response response = new Response("coming back from server");
+                    Response response;
+                    if (request.type.equals(ServerAction.list)) {
+                        response = this.server.list(request.user, EventType.valueOf(request.eventType));
+                    } else if (request.type.equals(ServerAction.reserve)) {
+                        response = this.server.reserve(request.user, request.id, request.eventId,
+                                EventType.valueOf(request.eventType));
+                    } else {
+                        continue;
+                    } // TODO other cases + ERROR CHECKING (if needed)
+
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     ObjectOutputStream oos = new ObjectOutputStream(baos);
                     oos.writeObject(response);
                     byte[] out = baos.toByteArray();
 
                     packet = new DatagramPacket(out, out.length, address, port);
+
+                    System.out.println("Sending response: " + response.message);
                     socket.send(packet);
-
-                    // DatagramPacket packet = new DatagramPacket(this.buffer, this.buffer.length);
-                    // System.out.println("before packet receive");
-                    // this.socket.receive(packet);
-                    // System.out.println("after packet receive");
-
-                    // InetAddress address = packet.getAddress();
-                    // int port = packet.getPort();
-                    // System.out.println("Before object retrieval");
-                    // // Received Request
-                    // ObjectInputStream iStream = new ObjectInputStream(new
-                    // ByteArrayInputStream(this.buffer));
-                    // System.out.println("after object input stream");
-                    // ServerRequest request = (ServerRequest) iStream.readObject();
-                    // System.out.println("request eventType: " + request.eventType);
-                    // // System.out.println(String.format("""
-                    // // Request:
-                    // // UserId: %s
-                    // // EventType: %s
-                    // // """, request.user.clientId, request.eventType.toString()));
-
-                    // // System.out.println("received from UDPclient: "
-                    // // + new String(packet.getData(), 0, packet.getLength()));
-                    // // Response res = new Response("from server: " + class.name);
-                    // Response response = new Response("from server: ");
-                    // ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    // ObjectOutputStream oos = new ObjectOutputStream(baos);
-                    // oos.writeObject(response);
-                    // byte[] buffer = baos.toByteArray();
-
-                    // // this.buffer = res.getBytes();
-                    // packet = new DatagramPacket(buffer, buffer.length, address, port);
-                    // // String received = new String(packet.getData(), 0, packet.getLength());
-
-                    // // if (received.equals("end")) {
-                    // // this.running = false;
-                    // // continue;
-                    // // }
-                    // socket.send(packet);
                 } catch (Exception e) {
                     System.out.println("Exception in UDPServer: " + e.getMessage());
                 }
             }
-            // this.socket.close();
         }
     }
 
-    // TODO fix UDPport logic + w/ input ServerPort
     int getUDPPort() {
         switch (this.name.toLowerCase()) {
             case "mtl":
@@ -286,7 +240,6 @@ public class Server extends UnicastRemoteObject implements IServer {
         return new Response("Unable to remote event - Event is based on a remote server.");
     }
 
-    // TODO fix with UDP
     public Response list(UserInfo user, EventType eventType) {
         if (!user.hasPermission(Permission.list)) {
             return new Response(
@@ -295,43 +248,22 @@ public class Server extends UnicastRemoteObject implements IServer {
         // current server events
         StringBuilder events = new StringBuilder(printEvents(eventType));
 
-        // fetch remote server events
+        // called from remote - return w/o further inter-server communication
+        if (!this.name.equalsIgnoreCase(user.server.name()))
+            return new Response(events.toString(), true);
 
-        // TODO refactor into separate function?
+        // fetch remote server events
         for (ServerPort server : ServerPort.values()) {
             if (server.PORT == -1 || server.PORT == user.server.PORT)
                 continue;
 
-            ServerRequest request = new ServerRequest(user, eventType.toString());
-            // Response request = new Response("test");
+            ServerRequest request = new ServerRequest(ServerAction.list, user, eventType.toString());
             Response response = sendServerRequest(request, server);
+            if (response.status) // TODO check if status is good in all other cases as needed
+                events.append(response.message);
         }
 
         return new Response(events.toString(), true);
-
-        // StringBuilder events = new StringBuilder(printEvents(eventType));
-        // // admin operation from remote server
-        // if (!user.server.name().equalsIgnoreCase(this.name)) {
-        // return new Response(events.toString(), true);
-        // }
-
-        // // admin operation from current server
-        // for (ServerPort s : ServerPort.values()) {
-        // if (s.PORT == -1 || s.PORT == user.server.PORT)
-        // continue;
-        // try {
-        // String registryURL = "rmi://localhost:" + String.valueOf(s.PORT) + "/" +
-        // s.name().toLowerCase();
-        // IServer remServer = (IServer) Naming.lookup(registryURL);
-        // events.append(remServer.list(user, eventType).message);
-        // } catch (Exception e) {
-        // System.out.println("Exception in admin list on current server: " +
-        // e.getMessage());
-        // return new Response("Exception in admin list on current server: " +
-        // e.getMessage());
-        // }
-        // }
-        // return new Response(events.toString(), true);
     }
 
     public Response sendServerRequest(ServerRequest request, ServerPort server) {
@@ -349,15 +281,24 @@ public class Server extends UnicastRemoteObject implements IServer {
                     + String.valueOf(getUDPPort(server)));
             socket.send(packet);
 
-            byte[] in = new byte[256];
+            byte[] in = new byte[1024];
             packet = new DatagramPacket(in, in.length);
             socket.receive(packet);
-
+            System.out.println("Received response back from server");
             ByteArrayInputStream bais = new ByteArrayInputStream(in);
             ObjectInputStream ois = new ObjectInputStream(bais);
-            Response response = (Response) ois.readObject();
+
+            System.out.println("before reading object");
+            Response response;
+            try {
+                response = (Response) ois.readObject();
+            } catch (Exception e) {
+                System.out.println("Exception in readObject sendServerRequest: " + e.getMessage());
+                return new Response(e.getMessage());
+            }
 
             System.out.println("Received: " + response.message);
+
             return response;
         } catch (Exception e) {
             System.out.println("Exception in sendRequest: " + e.getMessage());
@@ -366,7 +307,6 @@ public class Server extends UnicastRemoteObject implements IServer {
     }
 
     // Regular Operations
-    // TODO fix with UDP
     public Response reserve(UserInfo user, String id, String eventId, EventType eventType) {
         if (!user.hasPermission(Permission.reserve)) {
             return new Response(
@@ -387,6 +327,7 @@ public class Server extends UnicastRemoteObject implements IServer {
                         "Unable to reserve eventId: %s for clientId: %s - Client already has a reservation", eventId,
                         id));
 
+            // TODO Test remote logic w/ trying to add 4th remote reservation
             // check if called through remote server - to ensure max 3 remote reservations
             if (!eventLocationId.equalsIgnoreCase(user.server.name())) {
                 int count = 0;
@@ -399,28 +340,22 @@ public class Server extends UnicastRemoteObject implements IServer {
                     return new Response("Unable to reserve event - Maximum of 3 remote reservations per city.");
             }
 
-            eventData.get(eventId).addGuest(id);
+            eventData.get(eventId).addGuest(new String(id));
             return new Response(String.format("Successfully reserved eventType: %s eventId: %s for clientId: %s",
                     eventType.name(), eventId, id), true);
         }
 
         // operation on remote server
-        for (ServerPort s : ServerPort.values()) {
-            if (s.PORT == -1 || s.PORT == user.server.PORT)
+        for (ServerPort server : ServerPort.values()) {
+            if (server.PORT == -1 || server.PORT == user.server.PORT)
                 continue;
-            if (eventLocationId.equalsIgnoreCase(s.name())) { // found remote server
-                try {
-                    String registryURL = "rmi://localhost:" + String.valueOf(s.PORT) + "/" + s.name().toLowerCase();
-                    IServer remServer = (IServer) Naming.lookup(registryURL);
-                    return remServer.reserve(user, id, eventId, eventType);
-                } catch (Exception e) {
-                    System.out.println("Exception in reserve on remote server: " + e.getMessage());
-                    return new Response("Exception in reserve on remote server: " + e.getMessage());
-                }
+            if (eventLocationId.equalsIgnoreCase(server.name())) {
+                ServerRequest request = new ServerRequest(ServerAction.reserve, user, eventType.toString(), id,
+                        eventId);
+                Response response = sendServerRequest(request, server);
+                return response;
             }
         }
-
-        // invalid eventId (doesn't match <SERVER-NAME>ID pattern)
         return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
     }
 
@@ -442,6 +377,7 @@ public class Server extends UnicastRemoteObject implements IServer {
         return events.toString();
     }
 
+    // TODO inter-server
     public Response get(UserInfo user, String id) {
         if (!user.hasPermission(Permission.get)) {
             return new Response(
@@ -450,32 +386,9 @@ public class Server extends UnicastRemoteObject implements IServer {
 
         // TODO fix formatting
         return new Response(getEventsById(id));
-        // StringBuilder clientEvents = new StringBuilder(getEventsById(id));
-        // if (user.server.name().equalsIgnoreCase(this.name)) { // operation on current
-        // server
-        // return new Response(String.format("""
-        // %s
-        // """, clientEvents.toString()), true);
-        // }
-
-        // operation on current server
-        // for (ServerPort s : ServerPort.values()) {
-        // if (s.PORT == -1 || s.PORT == user.server.PORT)
-        // continue;
-
-        // try {
-        // String registryURL = "rmi://localhost:" + String.valueOf(s.PORT) + "/" +
-        // s.name().toLowerCase();
-        // IServer remServer = (IServer) Naming.lookup(registryURL);
-        // clientEvents.append("\n" + remServer.get(user, id).message);
-        // } catch (Exception e) {
-        // System.out.println("Exception in get on remote server: " + e.getMessage());
-        // return new Response("Exception in get on remote server: " + e.getMessage());
-        // }
-        // }
-        // return new Response(clientEvents.toString(), true);
     }
 
+    // TODO inter-server
     public Response cancel(UserInfo user, String id, String eventId) {
         if (!user.hasPermission(Permission.cancel)) {
             return new Response(
@@ -506,28 +419,5 @@ public class Server extends UnicastRemoteObject implements IServer {
         }
 
         return new Response("Unable to remote event - Event is based on a remote server.");
-        // operation on remote server
-        // for (ServerPort s : ServerPort.values()) {
-        // if (s.PORT == -1 || s.PORT == user.server.PORT)
-        // continue;
-        // if (eventLocationId.equalsIgnoreCase(s.name())) { // found remote server
-        // try {
-        // String registryURL = "rmi://localhost:" + String.valueOf(s.PORT) + "/" +
-        // s.name().toLowerCase();
-        // IServer remServer = (IServer) Naming.lookup(registryURL);
-        // return remServer.cancel(user, id, eventId);
-        // } catch (Exception e) {
-        // System.out.println("Exception in cancel on remote server: " +
-        // e.getMessage());
-        // return new Response("Exception in cancel on remote server: " +
-        // e.getMessage());
-        // }
-        // }
-        // }
-
-        // // invalid eventId (doesn't match <SERVER-NAME>ID pattern)
-        // return new Response(String.format("Invalid eventId: %s - Unable to connect to
-        // remote server.", eventId));
-
     }
 }
