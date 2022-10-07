@@ -7,10 +7,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.logging.*;
 
-// TODO concurrency within city servers
-// TODO UDP/IP inter-server communication instead of rmi
-//https://www.baeldung.com/udp-in-java
-
 public class ClientServer {
     static InputStreamReader is = new InputStreamReader(System.in);
     static BufferedReader br = new BufferedReader(is);
@@ -18,10 +14,6 @@ public class ClientServer {
     // Logging
     static Logger logger = Logger.getLogger(ClientServer.class.getSimpleName());
     static FileHandler fh;
-
-    // TODO delete udp in client
-    // TODO + clean up all other udp functions
-    UDPClient udp = new UDPClient();
 
     public static void main(String[] args) {
         try {
@@ -87,12 +79,6 @@ public class ClientServer {
                     }
                     continue;
                 }
-
-                if (input.equalsIgnoreCase("send")) {
-                    IServer.Response res = udp.sendMessage("Testing");
-                    System.out.println("RESPONSE FROM UDP: " + res);
-                    continue;
-                }
                 // !!!!!!! TESTING ONLY
 
                 if (input.length() > 0 && input.contains(" ")) {
@@ -127,41 +113,6 @@ public class ClientServer {
             fh.close();
         } catch (Exception e) {
             System.out.println("Error in ClientServer: " + e.getMessage());
-        }
-    }
-
-    public class UDPClient {
-        DatagramSocket socket;
-        InetAddress address;
-        byte[] buffer;
-
-        public UDPClient() {
-            try {
-                this.socket = new DatagramSocket();
-                this.address = InetAddress.getByName("localhost");
-            } catch (Exception e) {
-                System.out.println("Exception in UDPClient constructor: " + e.getMessage());
-                return;
-            }
-        }
-
-        // TODO try singular function to parse through required data from send and
-        // return needed data
-        public IServer.Response sendMessage(String message) {
-            try {
-                this.buffer = message.getBytes();
-                DatagramPacket packet = new DatagramPacket(this.buffer, this.buffer.length, this.address, 2111); // temp
-                                                                                                                 // for
-                                                                                                                 // mtl
-                this.socket.send(packet);
-                packet = new DatagramPacket(this.buffer, this.buffer.length);
-                this.socket.receive(packet);
-                String response = new String(packet.getData(), 0, packet.getLength());
-                return new IServer.Response(response);
-            } catch (Exception e) {
-                System.out.println("Exception in UDPClient sendMessage: " + e.getMessage());
-                return new IServer.Response("Exception in UDPClient sendMessage: " + e.getMessage());
-            }
         }
     }
 
@@ -331,7 +282,7 @@ public class ClientServer {
                     Completed: %s
                     Response:
                 %s
-                """, user.clientId, inputCommands[0].toUpperCase(), inputCommands.toString(), response.status,
+                """, user.clientId, inputCommands[0].toUpperCase(), String.join(" ", inputCommands), response.status,
                 response.message));
     }
 }

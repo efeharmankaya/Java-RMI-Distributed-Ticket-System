@@ -25,26 +25,17 @@ public class Server extends UnicastRemoteObject implements IServer {
     public Server(String name) throws RemoteException {
         super();
         this.name = name;
-        // TODO setup function to combine both server constructors
-        this.logger = Logger.getLogger(name);
-        try {
-            this.fh = new FileHandler(String.format("logs/server/%s.log", name));
-        } catch (IOException e) {
-            System.out.println("Exception in Server() : " + e.getMessage());
-            return;
-        }
-        this.logger.addHandler(this.fh);
-        SimpleFormatter formatter = new SimpleFormatter();
-        this.fh.setFormatter(formatter);
-        this.logger.setUseParentHandlers(false);
-        this.udp = new UDP(this, getUDPPort());
-        this.udp.start();
+        this.setupServer();
     }
 
     public Server(String name, HashMap<EventType, HashMap<String, EventData>> serverData) throws RemoteException {
         super();
         this.name = name;
         this.serverData = serverData;
+        this.setupServer();
+    }
+
+    public void setupServer() {
         this.logger = Logger.getLogger(name);
         try {
             this.fh = new FileHandler(String.format("logs/server/%s.log", name));
@@ -56,6 +47,7 @@ public class Server extends UnicastRemoteObject implements IServer {
         SimpleFormatter formatter = new SimpleFormatter();
         this.fh.setFormatter(formatter);
         this.logger.setUseParentHandlers(false);
+        this.logger.info("RMI Server created " + this.name.toUpperCase());
         this.udp = new UDP(this, getUDPPort());
         this.udp.start();
     }
@@ -73,6 +65,7 @@ public class Server extends UnicastRemoteObject implements IServer {
             this.port = port;
             try {
                 this.socket = new DatagramSocket(this.port);
+                this.server.logger.info("Started UDP server on port: " + String.valueOf(this.port));
             } catch (Exception e) {
                 System.out.println("Exception in UDPServer creating DatagramSocket: " + e.getMessage());
                 return;
@@ -97,6 +90,13 @@ public class Server extends UnicastRemoteObject implements IServer {
                     // parse return address
                     InetAddress address = packet.getAddress();
                     int port = packet.getPort();
+
+                    this.server.logger.info(String.format("""
+                            Received UDP packet
+                                Request Type: %s
+                                For user: %s
+                                From server: %s
+                            """, request.type, request.user.clientId, request.user.server.name().toUpperCase()));
 
                     // fetch response
                     Response response;
@@ -123,6 +123,14 @@ public class Server extends UnicastRemoteObject implements IServer {
                     ObjectOutputStream oos = new ObjectOutputStream(baos);
                     oos.writeObject(response);
                     byte[] out = baos.toByteArray();
+
+                    this.server.logger.info(String.format("""
+                                Sending UDP packet response back to %s for %s
+                                Completed: %s
+                                Response:
+                            %s
+                            """, request.user.server.name().toUpperCase(), request.type.toString(), response.status,
+                            response.message));
 
                     packet = new DatagramPacket(out, out.length, address, port);
 
@@ -168,6 +176,14 @@ public class Server extends UnicastRemoteObject implements IServer {
         for (Permission permission : user.permissions.permissions) {
             options.append(permission.message);
         }
+
+        this.logger.info(String.format("""
+                    Getting options message for %s
+                    Response:
+                        Status: %s
+                        Message:
+                    %s
+                """, user.clientId, true, options.toString()));
         return new Response(options.toString(), true);
     }
 
@@ -196,23 +212,50 @@ public class Server extends UnicastRemoteObject implements IServer {
         return out.toString();
     }
 
+    private void logNoPermission(ServerAction action, UserInfo user) {
+        this.logger.info(String.format("""
+                User: %s attempted to access %s
+                Invalid permissions - prohibited.
+                """, user.clientId, action.toString()));
+    }
+
+    private void logResponse(ServerAction action, UserInfo user, String[] params, Response response) {
+        this.logger.info(String.format("""
+                    Accessing %s
+                    User: %s
+                    Params: %s
+                    Status: %s
+                    Response:
+                %s
+                """, action.toString(), user.clientId, String.join(" ", params), response.status, response.message));
+    }
+
     // Server Operations
     // Admin Operations
     public Response add(UserInfo user, String eventId, EventType eventType, int capacity) {
         if (!user.hasPermission(Permission.add)) {
+            logNoPermission(ServerAction.add, user);
             return new Response(
                     "User doesn't have valid permissions to access : " + Permission.add.label.toUpperCase());
         }
+        String[] params = new String[] { eventId, eventType.toString(), String.valueOf(capacity) };
         String eventLocationId = eventId.substring(0, 3);
         // admin operation on current server
         if (eventLocationId.equalsIgnoreCase(this.name)) {
             HashMap<String, EventData> events = this.serverData.get(eventType);
-            if (events.containsKey(eventId))
-                return new Response(String.format("Unable to add eventId: %s as it already exists.", eventId));
+            if (events.containsKey(eventId)) {
+                Response response = new Response(
+                        String.format("Unable to add eventId: %s as it already exists.", eventId));
+                logResponse(ServerAction.add, user, params, response);
+                return response;
+            }
 
             events.put(eventId, new EventData(capacity));
             this.serverData.put(eventType, events);
-            return new Response(String.format("Successfully added eventId: %s", eventId), true);
+
+            Response response = new Response(String.format("Successfully added eventId: %s", eventId), true);
+            logResponse(ServerAction.add, user, params, response);
+            return response;
         }
 
         // admin operation on remote server
@@ -222,29 +265,40 @@ public class Server extends UnicastRemoteObject implements IServer {
             if (eventLocationId.equalsIgnoreCase(server.name())) {
                 AddRequest request = new AddRequest(user, eventType.toString(), eventId, capacity);
                 Response response = sendServerRequest(request, server);
+
+                logResponse(ServerAction.add, user, params, response);
                 return response;
             }
         }
-        return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server %s.", eventId,
-                eventLocationId));
+
+        Response response = new Response(String.format("Invalid eventId: %s - Unable to connect to remote server %s.",
+                eventId, eventLocationId));
+        logResponse(ServerAction.add, user, params, response);
+        return response;
     }
 
     public Response remove(UserInfo user, String eventId, EventType eventType) {
         if (!user.hasPermission(Permission.remove)) {
+            logNoPermission(ServerAction.remove, user);
             return new Response(
                     "User doesn't have valid permissions to access : " + Permission.remove.label.toUpperCase());
         }
-
+        String[] params = new String[] { eventId, eventType.toString() };
         String eventLocationId = eventId.substring(0, 3);
         // admin operation on current server
         if (eventLocationId.equalsIgnoreCase(this.name)) {
             HashMap<String, EventData> events = this.serverData.get(eventType);
-            if (!events.containsKey(eventId))
-                return new Response("Unable to remove event: eventId does not exist");
+            if (!events.containsKey(eventId)) {
+                Response response = new Response("Unable to remove event: eventId does not exist");
+                logResponse(ServerAction.remove, user, params, response);
+                return response;
+            }
 
             events.remove(eventId);
             this.serverData.put(eventType, events);
-            return new Response(String.format("Successfully removed eventId: %s", eventId), true);
+            Response response = new Response(String.format("Successfully removed eventId: %s", eventId), true);
+            logResponse(ServerAction.remove, user, params, response);
+            return response;
         }
 
         // admin operation on remote server
@@ -254,15 +308,20 @@ public class Server extends UnicastRemoteObject implements IServer {
             if (eventLocationId.equalsIgnoreCase(server.name())) {
                 RemoveRequest request = new RemoveRequest(user, eventType.toString(), eventId);
                 Response response = sendServerRequest(request, server);
+                logResponse(ServerAction.remove, user, params, response);
                 return response;
             }
         }
-        return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server %s.", eventId,
-                eventLocationId));
+
+        Response response = new Response(String.format("Invalid eventId: %s - Unable to connect to remote server %s.",
+                eventId, eventLocationId));
+        logResponse(ServerAction.remove, user, params, response);
+        return response;
     }
 
     public Response list(UserInfo user, EventType eventType) {
         if (!user.hasPermission(Permission.list)) {
+            logNoPermission(ServerAction.list, user);
             return new Response(
                     "User doesn't have valid permissions to access : " + Permission.list.label.toUpperCase());
         }
@@ -273,6 +332,7 @@ public class Server extends UnicastRemoteObject implements IServer {
         if (!this.name.equalsIgnoreCase(user.server.name()))
             return new Response(events.toString(), true);
 
+        String[] params = new String[] { eventType.toString() };
         // fetch remote server events
         for (ServerPort server : ServerPort.values()) {
             if (server.PORT == -1 || server.PORT == user.server.PORT)
@@ -280,11 +340,12 @@ public class Server extends UnicastRemoteObject implements IServer {
 
             ListRequest request = new ListRequest(user, eventType.toString());
             Response response = sendServerRequest(request, server);
-            if (response.status)
+            if (response.status) // TODO check if status is good in all other .APPEND cases + add note if not
                 events.append(response.message);
         }
-
-        return new Response(events.toString(), true);
+        Response response = new Response(events.toString(), true);
+        logResponse(ServerAction.list, user, params, response);
+        return response;
     }
 
     public Response sendServerRequest(ServerRequest request, ServerPort server) {
@@ -300,6 +361,11 @@ public class Server extends UnicastRemoteObject implements IServer {
                     getUDPPort(server));
             System.out.println("Sending request to: " + server.name().toUpperCase() + " port: "
                     + String.valueOf(getUDPPort(server)));
+
+            this.logger.info(String.format("""
+                        Sending UDP request to %s for %s
+                    """, server.name().toUpperCase(), request.type.toString()));
+
             socket.send(packet);
 
             byte[] in = new byte[1024];
@@ -318,8 +384,15 @@ public class Server extends UnicastRemoteObject implements IServer {
                 return new Response(e.getMessage());
             }
 
-            System.out.println("Received: " + response.message);
+            this.logger.info(String.format("""
+                        Received UDP response from %s
+                        Response:
+                            Completed: %s
+                            Message:
+                        %s
+                    """, server.name().toUpperCase(), response.status, response.message));
 
+            System.out.println("Received: " + response.message);
             return response;
         } catch (Exception e) {
             System.out.println("Exception in sendRequest: " + e.getMessage());
@@ -330,23 +403,35 @@ public class Server extends UnicastRemoteObject implements IServer {
     // Regular Operations
     public Response reserve(UserInfo user, String id, String eventId, EventType eventType) {
         if (!user.hasPermission(Permission.reserve)) {
+            logNoPermission(ServerAction.reserve, user);
             return new Response(
                     "User doesn't have valid permissions to access : " + Permission.reserve.label.toUpperCase());
         }
 
+        String[] params = new String[] { id, eventId, eventType.toString() };
         String eventLocationId = eventId.substring(0, 3);
         if (eventLocationId.equalsIgnoreCase(this.name)) { // operation on current server
             HashMap<String, EventData> eventData = this.serverData.get(eventType);
-            if (!eventData.containsKey(eventId))
-                return new Response(String.format("Unable to reserve eventId: %s - Does not exist.", eventId));
+            Response response;
+            if (!eventData.containsKey(eventId)) {
+                response = new Response(String.format("Unable to reserve eventId: %s - Does not exist.", eventId));
+                logResponse(ServerAction.reserve, user, params, response);
+                return response;
+            }
 
-            if (eventData.get(eventId).capacity < 1)
-                return new Response(String.format("Unable to reserve eventID: %s - No remaining tickets.", eventId));
-
-            if (eventData.get(eventId).guests.contains(id))
-                return new Response(String.format(
+            if (eventData.get(eventId).capacity < 1) {
+                response = new Response(
+                        String.format("Unable to reserve eventID: %s - No remaining tickets.", eventId));
+                logResponse(ServerAction.reserve, user, params, response);
+                return response;
+            }
+            if (eventData.get(eventId).guests.contains(id)) {
+                response = new Response(String.format(
                         "Unable to reserve eventId: %s for clientId: %s - Client already has a reservation", eventId,
                         id));
+                logResponse(ServerAction.reserve, user, params, response);
+                return response;
+            }
 
             // check if called through remote server - to ensure max 3 remote reservations
             if (!eventLocationId.equalsIgnoreCase(user.server.name())) {
@@ -356,13 +441,19 @@ public class Server extends UnicastRemoteObject implements IServer {
                     if (e.getValue().guests.contains(id))
                         count++;
                 }
-                if (++count > 3)
-                    return new Response("Unable to reserve event - Maximum of 3 remote reservations per city.");
+                if (++count > 3) {
+                    response = new Response("Unable to reserve event - Maximum of 3 remote reservations per city.");
+                    logResponse(ServerAction.reserve, user, params, response);
+                    return response;
+                }
             }
 
             eventData.get(eventId).addGuest(new String(id));
-            return new Response(String.format("Successfully reserved eventType: %s eventId: %s for clientId: %s",
+
+            response = new Response(String.format("Successfully reserved eventType: %s eventId: %s for clientId: %s",
                     eventType.name(), eventId, id), true);
+            logResponse(ServerAction.reserve, user, params, response);
+            return response;
         }
 
         // operation on remote server
@@ -375,7 +466,11 @@ public class Server extends UnicastRemoteObject implements IServer {
                 return response;
             }
         }
-        return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
+
+        Response response = new Response(
+                String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
+        logResponse(ServerAction.reserve, user, params, response);
+        return response;
     }
 
     private String getEventsById(String id) {
@@ -396,9 +491,9 @@ public class Server extends UnicastRemoteObject implements IServer {
         return events.toString();
     }
 
-    // TODO inter-server
     public Response get(UserInfo user, String id) {
         if (!user.hasPermission(Permission.get)) {
+            logNoPermission(ServerAction.get, user);
             return new Response(
                     "User doesn't have valid permissions to access : " + Permission.get.label.toUpperCase());
         }
@@ -406,9 +501,10 @@ public class Server extends UnicastRemoteObject implements IServer {
         StringBuilder events = new StringBuilder(getEventsById(id));
 
         // operation on remote server - return events w/o fetching
-        if (!user.server.name().equalsIgnoreCase(this.name)) {
+        if (!user.server.name().equalsIgnoreCase(this.name))
             return new Response(events.toString(), true);
-        }
+
+        String[] params = new String[] { id };
         // operation on current (home) server
         // fetch remote server events
         for (ServerPort server : ServerPort.values()) {
@@ -421,36 +517,52 @@ public class Server extends UnicastRemoteObject implements IServer {
                 events.append(response.message);
         }
 
-        return new Response(events.toString(), true);
+        Response response = new Response(events.toString(), true);
+        logResponse(ServerAction.get, user, params, response);
+        return response;
     }
 
     public Response cancel(UserInfo user, String id, String eventId) {
         if (!user.hasPermission(Permission.cancel)) {
+            logNoPermission(ServerAction.cancel, user);
             return new Response(
                     "User doesn't have valid permissions to access : " + Permission.cancel.label.toUpperCase());
         }
         String eventLocationId = eventId.substring(0, 3);
         // operation on current server
+        String[] params = new String[] { id, eventId };
         if (eventLocationId.equalsIgnoreCase(this.name)) {
+            Response response;
             // (key, value) => (eventType, eventData HashMap)
             for (Map.Entry<EventType, HashMap<String, EventData>> event : this.serverData.entrySet()) {
                 // (key, value) => (eventId, eventData)
                 for (Map.Entry<String, EventData> eventData : event.getValue().entrySet()) {
                     if (eventData.getKey().equalsIgnoreCase(eventId)) {
-                        if (!eventData.getValue().guests.contains(id))
-                            return new Response(String.format(
+                        if (!eventData.getValue().guests.contains(id)) {
+                            response = new Response(String.format(
                                     "Unable to cancel ticket - %s does not have a reservation for %s", id, eventId));
+                            logResponse(ServerAction.cancel, user, params, response);
+                            return response;
+                        }
 
                         if (!user.clientId.equalsIgnoreCase(id) && !user.isAdmin()) // user != ticket holder && !admin
-                            return new Response(
+                        {
+                            response = new Response(
                                     "Unable to cancel the ticket - Tickets must be cancelled by the original ticket holder or an admin.");
-
+                            logResponse(ServerAction.cancel, user, params, response);
+                            return response;
+                        }
                         this.serverData.get(event.getKey()).get(eventData.getKey()).removeGuest(id);
-                        return new Response("Successfully canceled the ticket for eventId: " + eventId, true);
+
+                        response = new Response("Successfully canceled the ticket for eventId: " + eventId, true);
+                        logResponse(ServerAction.cancel, user, params, response);
+                        return response;
                     }
                 }
             }
-            return new Response("Unable to cancel ticket - eventId does not exist.");
+            response = new Response("Unable to cancel ticket - eventId does not exist.");
+            logResponse(ServerAction.cancel, user, params, response);
+            return response;
         }
 
         // operation on remote server
@@ -465,7 +577,9 @@ public class Server extends UnicastRemoteObject implements IServer {
             }
         }
 
-        return new Response(String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
-
+        Response response = new Response(
+                String.format("Invalid eventId: %s - Unable to connect to remote server.", eventId));
+        logResponse(ServerAction.cancel, user, params, response);
+        return response;
     }
 }
