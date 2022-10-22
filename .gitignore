@@ -5,6 +5,9 @@
 *.lck
 logs
 
+.vscode
+.DS_Store
+
 # Env
 *.args
 
