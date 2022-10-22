@@ -1,18 +1,65 @@
-## Getting Started
+# Java RMI Distributed Ticket System
 
-Welcome to the VS Code Java world. Here is a guideline to help you get started to write Java code in Visual Studio Code.
+Implemented a festival's ticket reservation system as a distributed application using Java RMI. The distributed system allows clients to login and perform operations on the 3 remote servers (MTL, TOR, VAN) using a permission based system. Each city's server hosts their own server data structure corresponding to their respective events.
 
-## Folder Structure
+# Usage
 
-The workspace contains two folders by default, where:
+### Launching the Servers
 
-- `src`: the folder to maintain sources
-- `lib`: the folder to maintain dependencies
+Using 3 separate terminal instances run the following commands to compile and start each server
 
-Meanwhile, the compiled output files will be generated in the `bin` folder by default.
+```
+> javac <server-name>.java
+> java <server-name>
 
-> If you want to customize the folder structure, open `.vscode/settings.json` and update the related settings there.
+# ex.   > javac MTLServer.java
+        > java MTLServer
+```
 
-## Dependency Management
+### Launching the Client
 
-The `JAVA PROJECTS` view allows you to manage your dependencies. More details can be found [here](https://github.com/microsoft/vscode-java-dependency#manage-dependencies).
+Using another terminal instance run the following commands to compile and start the client server used to login from and perform operations
+
+```
+> javac ClientServer.java
+> java ClientServer
+```
+
+### Client ID usage
+
+The client ID used to login to the client server follows the structure:
+
+`<server-name><client-type><client-id>`
+
+Ex.
+
+```
+MTL Admin User: `MTLA1234`
+TOR User: `TORP1234`
+```
+
+From which the `<server-name>` stems from the server shorthand names [MTL, TOR, VAN]
+and the `<client-type>` stems from either 'A' or 'P' (although any letter that is not 'A' will have regular user permissions)
+
+# Server Data Structure
+
+```java
+HashMap<EventType, HashMap<String, EventData>> serverData;
+
+// Example Structure
+serverData {
+    EventType.Arts: {
+        "<event-id>": {
+            capacity: int,
+            guests: String[]
+        },
+        "MTLM010122": {
+            capacity: 9,
+            guests: ["MTLP5555"]
+        },
+        "MTLM101122": {...},
+    },
+    EventType.Theatre: {...},
+    EventType.Concert: {...}
+}
+```
